@@ -62,6 +62,11 @@ class VKFFT : NSObject {
     private var fftSetup:FFTSetup
     private var hasPerformedFFT: Bool = false
     private var complexBuffer: DSPSplitComplex!
+    private var FFTNormFactor: Float32
+    private final var kAdjust0DB: Float32 = 1.5849e-13
+    private var kAdjustDB: Float32 = 128.0
+    
+    private var fftresult = [[Float]]()
     
     /// Instantiate the FFT.
     /// - Parameter withSize: The length of the sample buffer we'll be analyzing. Must be a power of 2. The resulting ```magnitudes``` are of length ```inSize/2```.
@@ -78,6 +83,8 @@ class VKFFT : NSObject {
         
         self.size = inSize
         self.halfSize = inSize / 2
+        
+        self.FFTNormFactor = 1.0/Float32(2*inSize)
         
         // create fft setup
         self.log2Size = Int(log2f(sizeFloat))
@@ -98,29 +105,29 @@ class VKFFT : NSObject {
     /// - Parameter inMonoBuffer: Audio data in mono format
     func fftForward(_ inMonoBuffer:[Float]) {
         
-        var analysisBuffer = inMonoBuffer
+        let analysisBuffer = inMonoBuffer
         
         // If we have a window, apply it now. Since 99.9% of the time the window array will be exactly the same, an optimization would be to create it once and cache it, possibly caching it by size.
-        if self.windowType != .none {
-            
-            if self.window == nil {
-                self.window = [Float](repeating: 0.0, count: size)
-                
-                switch self.windowType {
-                case .hamming:
-                    vDSP_hann_window(&self.window!, UInt(size), Int32(vDSP_HANN_NORM))
-                case .hanning:
-                    vDSP_hamm_window(&self.window!, UInt(size), 0)
-                default:
-                    break
-                }
-            }
-            
-            // Apply the window
-            vDSP_vmul(inMonoBuffer, 1, self.window, 1, &analysisBuffer, 1, UInt(inMonoBuffer.count))
-        }
+//        if self.windowType != .none {
+//            
+//            if self.window == nil {
+//                self.window = [Float](repeating: 0.0, count: size)
+//                
+//                switch self.windowType {
+//                case .hamming:
+//                    vDSP_hann_window(&self.window!, UInt(size), Int32(vDSP_HANN_NORM))
+//                case .hanning:
+//                    vDSP_hamm_window(&self.window!, UInt(size), 0)
+//                default:
+//                    break
+//                }
+//            }
+//            
+//            // Apply the window
+//            vDSP_vmul(inMonoBuffer, 1, self.window, 1, &analysisBuffer, 1, UInt(inMonoBuffer.count))
+//        }
 
-        // Doing the job of vDSP_ctoz 😒. (See below.)
+        // Doing the job of vDSP_ctoz. (See below.)
         var reals = [Float]()
         var imags = [Float]()
         for (idx, element) in analysisBuffer.enumerated() {
@@ -134,11 +141,14 @@ class VKFFT : NSObject {
         
         // Perform a forward FFT
         vDSP_fft_zrip(self.fftSetup, &(self.complexBuffer!), 1, UInt(self.log2Size), Int32(FFT_FORWARD))
+        vDSP_vsmul(complexBuffer.realp, 1, &FFTNormFactor, complexBuffer.realp, 1, vDSP_Length(halfSize))
+        vDSP_vsmul(complexBuffer.imagp, 1, &FFTNormFactor, complexBuffer.imagp, 1, vDSP_Length(halfSize))
+
+        complexBuffer.imagp[0] = 0.0
         
         // Store and square (for better visualization & conversion to db) the magnitudes
         self.magnitudes = [Float](repeating: 0.0, count: self.halfSize)
         vDSP_zvmags(&(self.complexBuffer!), 1, &self.magnitudes!, 1, UInt(self.halfSize))
-        
         self.hasPerformedFFT = true
     }
     
@@ -325,4 +335,28 @@ class VKFFT : NSObject {
         let magnitude = max(inMagnitude, 0.000000000001)
         return 10 * log10f(magnitude)
     }
+    
+    private func ReturnMagnitudes() -> [Float] {
+        return magnitudes
+    }
+    
+    func GetFFTResult(_ TotalFrames: Int, _ AudioSample: [Float]) {
+        let newFrames = Int(powf(2.0, Float(Int(log2(Float(TotalFrames))))))
+        windowType = VKFFTWindowType.hanning
+        let newarray = Array(AudioSample[0..<newFrames])
+        var currentFrame = 0
+        for i in 0..<newFrames / 4096 / 10 {
+            currentFrame = i*4096*10
+            if currentFrame > newFrames {
+                break
+            }
+            fftForward(Array(newarray[currentFrame..<currentFrame+4096*10]))
+            fftresult.append(ReturnMagnitudes())
+        }
+    }
+    
+    func ReturnFFTResult() -> [[Float]] {
+        return fftresult
+    }
+    
 }

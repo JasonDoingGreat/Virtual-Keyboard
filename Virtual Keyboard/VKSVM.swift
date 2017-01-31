@@ -24,11 +24,9 @@ class VKSVM: NSObject {
     }
     
     // FFT Parameters
-    var fft: VKFFT!
     private let maxDB: Float = 64.0
     private let minDB: Float = -32.0
     private var headroom: Float = 0.0
-    var finalSamples = [Float]()
     
     // SVM Parameters
     private var paraNumbers: Int = 0
@@ -46,27 +44,6 @@ class VKSVM: NSObject {
     override init() {
         super.init()
         model = SVMmodel()
-    }
-    
-    func GetFFTOutput() {
-        
-        if fft == nil {
-            return
-        }
-        
-        let count = fft.numberOfBands
-        headroom = maxDB - minDB
-        for i in 0..<count {
-            let Freq = fft.bandFrequencies[i]
-            if Freq >= 18000 && Freq <= 20000 {
-                let magnitude = fft.magnitudeAtBand(i)
-                var magnitudeDB = VKFFT.toDB(magnitude)
-                magnitudeDB = max(0, magnitudeDB + abs(minDB))
-                let dbRatio = min(1.0, magnitudeDB / headroom)
-                self.finalSamples.append(Freq)
-                self.finalSamples.append(dbRatio*300)
-            }
-        }
     }
     
     private func MatrixDotProduct(_ matrixA: [Float], _ matrixB: [Float]) -> [Float] {

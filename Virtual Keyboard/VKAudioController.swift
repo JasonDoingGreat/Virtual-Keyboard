@@ -57,28 +57,6 @@ class VKAudioController: NSObject {
         exit(1)
     }
     
-    func startIO() {
-        do {
-            if self.audioUnit == nil {
-                setupAudioSession()
-                setupAudioUnit()
-            }
-            
-            try self.audioSession.setActive(true)
-            CheckError(AudioUnitInitialize(self.audioUnit), operation: "AudioUnit Initialize Error!")
-        } catch {
-            print("Start Recording error: \(error)")
-        }
-    }
-    
-    func startRecording() {
-        CheckError(AudioOutputUnitStart(self.audioUnit), operation: "Audio Output Unit Start Error!")
-    }
-    
-    func stopRecording() {
-        CheckError(AudioOutputUnitStop(self.audioUnit), operation: "Audio Output Unit Start Error!")
-    }
-    
     private let recordingCallback: AURenderCallback = { (inRefCon, ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, ioData)
         -> OSStatus in
         
@@ -233,6 +211,28 @@ class VKAudioController: NSObject {
                                      UInt32(MemoryLayout<UInt32>.size)),
                     operation: "couldn't allocate buffers")
         
+    }
+    
+    func startIO() {
+        do {
+            if self.audioUnit == nil {
+                setupAudioSession()
+                setupAudioUnit()
+            }
+            
+            try self.audioSession.setActive(true)
+            CheckError(AudioUnitInitialize(self.audioUnit), operation: "AudioUnit Initialize Error!")
+        } catch {
+            print("Start Recording error: \(error)")
+        }
+    }
+    
+    func startRecording() {
+        CheckError(AudioOutputUnitStart(self.audioUnit), operation: "Audio Output Unit Start Error!")
+    }
+    
+    func stopRecording() {
+        CheckError(AudioOutputUnitStop(self.audioUnit), operation: "Audio Output Unit Start Error!")
     }
     
     func createButtonPressedSound() {
